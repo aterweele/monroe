@@ -117,7 +117,7 @@ to the one used on nrepl side.")
 (defvar monroe-nrepl-server-cmd "lein"
   "Command to start nrepl server. Defaults to Leiningen")
 
-(defvar monroe-nrepl-server-cmd-args "trampoline repl :headless"
+(defvar monroe-nrepl-server-cmd-args '("trampoline" "repl" ":headless")
   "Arguments to pass to the nrepl command. Defaults to 'trampoline repl :headless'")
 
 (defvar monroe-nrepl-server-buffer-name "monroe nrepl server")
@@ -611,10 +611,16 @@ by locatin monroe-nrepl-server-project-file"
          (repl-started-dir (monroe-locate-port-file)))
     (if repl-started-dir
         (message "nREPL server already running in %s" repl-started-dir)
-      (progn
-        (message "Starting nREPL server in %s" (monroe-get-directory))
-        (async-shell-command (concat monroe-nrepl-server-cmd " " monroe-nrepl-server-cmd-args)
-                             nrepl-buf-name)))))
+      (let* ((buffer (generate-new-buffer nrepl-buf-name))
+             (directory (monroe-get-directory))
+             ;; copy bindings, as these may be directory- or file-
+             ;; local variables.
+             (cmd monroe-nrepl-server-cmd)
+             (args monroe-nrepl-server-cmd-args))
+        (with-current-buffer buffer
+          (setq-local default-directory directory)
+          (message "Starting nREPL server in %s" directory)
+          (apply 'start-process nrepl-buf-name buffer cmd args))))))
 
 (defun monroe-extract-keys (htable)
   "Get all keys from hashtable."

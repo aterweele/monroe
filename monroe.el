@@ -728,16 +728,6 @@ The following keys are available in `monroe-interaction-mode`:
 (defun monroe (arg)
   "Connect to an nREPL server and create a buffer for interaction."
   (interactive "P")
-  ;; FIXME commented out to NOT ignore errors while I debug
-  ;; (unless (ignore-errors
-  ;;           (let ((comint-buffer (get-buffer-create (concat "*monroe: " host-and-port "*"))))
-  ;;             (prog1
-  ;;                 (monroe-connect host-and-port)
-  ;;               (with-current-buffer comint-buffer
-  ;;                 (goto-char (point-max))
-  ;;                 (monroe-mode)
-  ;;                 (switch-to-buffer (current-buffer))))))
-  ;;   (message "Unable to connect to %s" host-and-port))
   (pcase-let*
       ((`(,connect ,where ,autodetected)
         (or (when-let ((host-and-port
@@ -766,13 +756,15 @@ The following keys are available in `monroe-interaction-mode`:
              (cons #'monroe-connect-socket
                    (read-file-name "socket file: "
                                    nil monroe-socket-file t nil)))))))
-    (with-current-buffer
-        (get-buffer-create (concat "*monroe: " where "*"))
-      (prog1
-          (funcall connect where)
-        (goto-char (point-max))
-        (monroe-mode)
-        (switch-to-buffer (current-buffer))))))
+    (unless (ignore-errors
+              (with-current-buffer
+                  (get-buffer-create (concat "*monroe: " where "*"))
+                (prog1
+                    (funcall connect where)
+                  (goto-char (point-max))
+                  (monroe-mode)
+                  (switch-to-buffer (current-buffer)))))
+      (message "Unable to connect to %s" host-and-port))))
 (provide 'monroe)
 
 ;;; monroe.el ends here

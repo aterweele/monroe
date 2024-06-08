@@ -444,17 +444,6 @@ monroe-repl-buffer."
     (monroe-send-hello (monroe-new-session-handler (process-buffer process)))
     process))
 
-(defcustom monroe-connect-function #'monroe-connect-host-port
-  "How Monroe connects to an nREPL server."
-  :type '(radio (function-item monroe-connect-socket)
-                (function-item monroe-connect-host-port)
-                (function))
-  :group 'monroe)
-
-(defun monroe-connect (&rest args)
-  "Connect according to `monroe-connect-function'."
-  (apply monroe-connect-function args))
-
 (defun monroe-disconnect ()
   "Disconnect from current nrepl connection. Calling this function directly
 will force connection closing, which will as result call '(monroe-sentinel)'."
@@ -739,17 +728,6 @@ The following keys are available in `monroe-interaction-mode`:
 (defun monroe (connect where)
   "Connect to an nREPL server and create a buffer for interaction."
   (interactive
-   ;; old code
-   ;; (let ((connect-to (or (monroe-locate-running-nrepl-host)
-   ;;                       ;; FIXME here we know whether to connect via
-   ;;                       ;; host/port or socket file. So maybe we
-   ;;                       ;; don't need the dispatching version of
-   ;;                       ;; `monroe-connect'?
-   ;;                       (monroe-locate-socket)
-   ;;                       monroe-default-host)))
-   ;;   (list
-   ;;    (read-string (format "Connect to (default '%s'): " connect-to)
-   ;;                 nil nil connect-to)))
    (pcase-let ((`(,connect . ,where)
                 (or (when-let ((host-and-port
                                 (monroe-locate-running-nrepl-host)))

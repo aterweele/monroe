@@ -725,20 +725,9 @@ The following keys are available in `monroe-interaction-mode`:
   :init-value nil :lighter " Monroe" :keymap monroe-interaction-mode-map)
 
 ;;;###autoload
-(defun monroe (connect where)
+(defun monroe (arg)
   "Connect to an nREPL server and create a buffer for interaction."
-  (interactive
-   (pcase-let ((`(,connect . ,where)
-                (or (when-let ((host-and-port
-                                (monroe-locate-running-nrepl-host)))
-                      (cons #'monroe-connect-host-port host-and-port))
-                    (when-let ((socket-file (monroe-locate-socket)))
-                      (cons #'monroe-connect-socket socket-file))
-                    (cons #'monroe-connect-host-port host-and-port))))
-     ;; TODO: if called with a prefix argument or if the -locate
-     ;; functions found nothing, then prompt the user with mhere to
-     ;; connect.
-     (list connect where)))
+  (interactive "P")
   ;; FIXME commented out to NOT ignore errors while I debug
   ;; (unless (ignore-errors
   ;;           (let ((comint-buffer (get-buffer-create (concat "*monroe: " host-and-port "*"))))
@@ -749,13 +738,41 @@ The following keys are available in `monroe-interaction-mode`:
   ;;                 (monroe-mode)
   ;;                 (switch-to-buffer (current-buffer))))))
   ;;   (message "Unable to connect to %s" host-and-port))
-  (with-current-buffer
-                (get-buffer-create (concat "*monroe: " where "*"))
-              (prog1
-                  (funcall connect where)
-                (goto-char (point-max))
-                (monroe-mode)
-                (switch-to-buffer (current-buffer)))))
+  (pcase-let*
+      ((`(,connect ,where ,autodetected)
+        (or (when-let ((host-and-port
+                        (monroe-locate-running-nrepl-host)))
+              (list #'monroe-connect-host-port host-and-port t))
+            (when-let ((socket-file (monroe-locate-socket)))
+              (list #'monroe-connect-socket socket-file t))
+            (list #'monroe-connect-host-port monroe-default-host nil)))
+       (`(,connect . ,where)
+        (if (and autodetected
+                 ;; i.e., called without any prefix argument.
+                 (not (prefix-numeric-value current-prefix-arg)))
+            (cons connect where)
+          (pcase (read-multiple-choice
+                  "Connect via?"
+                  '((?h "host and port"
+                        "Connect to an nREPL by specifying a network hostname and port number.")
+                    (?s "socket"
+                        "Connect to an nREPL on a local UNIX socket file.")))
+            (`(,_ "host and port" . ,_)
+             (cons #'monroe-connect-host-port
+                   (read-string (format "Host (default '%s'): "
+                                        monroe-default-host)
+                                nil nil monroe-default-host)))
+            (`(,_ "socket" . ,_)
+             (cons #'monroe-connect-socket
+                   (read-file-name "socket file: "
+                                   nil monroe-socket-file t nil)))))))
+    (with-current-buffer
+        (get-buffer-create (concat "*monroe: " where "*"))
+      (prog1
+          (funcall connect where)
+        (goto-char (point-max))
+        (monroe-mode)
+        (switch-to-buffer (current-buffer))))))
 (provide 'monroe)
 
 ;;; monroe.el ends here

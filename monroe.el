@@ -91,6 +91,11 @@ e.g. 'clojure.stacktrace/print-stack-trace for old-style stack traces."
   :type 'symbol
   :group 'monroe)
 
+(defcustom monroe-socket-file ".nrepl.socket"
+  "The name of the socket file to look."
+  :type 'string
+  :group 'monroe)
+
 (defvar monroe-version "0.4.0"
   "The current monroe version.")
 
@@ -364,6 +369,11 @@ monroe-repl-buffer."
     str
     default))
 
+(defun monroe-locate-socket ()
+  (let ((dir (locate-dominating-file default-directory monroe-socket-file)))
+    (when dir
+      (concat dir monroe-socket-file))))
+
 (defun monroe-locate-port-file ()
   (locate-dominating-file default-directory ".nrepl-port"))
 
@@ -373,7 +383,9 @@ monroe-repl-buffer."
     (when dir
       (with-temp-buffer
         (insert-file-contents (concat dir ".nrepl-port"))
-        (concat "localhost:" (buffer-string))))))
+        (let ((port (buffer-string)))
+          (when (not (string-blank-p port))
+            (concat "localhost:" port)))))))
 
 (defun monroe-extract-host (buff-name)
   "Take host from monroe buffers."
@@ -400,7 +412,7 @@ monroe-repl-buffer."
         (substring host 8)
       host)))
 
-(defun monroe-connect (host-and-port)
+(defun monroe-connect-host-port (host-and-port)
   "Connect to remote endpoint using provided hostname and port."
   (let* ((hp   (split-string (monroe-strip-protocol host-and-port) ":"))
          (host (monroe-valid-host-string (car hp) "localhost"))
@@ -416,6 +428,21 @@ monroe-repl-buffer."
       (set-process-coding-system process 'utf-8-unix 'utf-8-unix)
       (monroe-send-hello (monroe-new-session-handler (process-buffer process)))
       process)))
+
+(defun monroe-connect-socket (socket-file)
+  "Connect to a local Unix socket."
+  (message "here!")                     ;XXX
+  (let ((process (make-network-process
+                  ;; TODO is this enough args?
+                  :family 'local
+                  :name (concat "monroe/" socket-file)
+                  :remote (expand-file-name socket-file)
+                  :buffer (concat "*monroe-connection: " socket-file "*"))))
+    (set-process-filter process 'monroe-net-filter)
+    (set-process-sentinel process 'monroe-sentinel)
+    (set-process-coding-system process 'utf-8-unix 'utf-8-unix)
+    (monroe-send-hello (monroe-new-session-handler (process-buffer process)))
+    process))
 
 (defun monroe-disconnect ()
   "Disconnect from current nrepl connection. Calling this function directly
@@ -698,23 +725,46 @@ The following keys are available in `monroe-interaction-mode`:
   :init-value nil :lighter " Monroe" :keymap monroe-interaction-mode-map)
 
 ;;;###autoload
-(defun monroe (host-and-port)
-  "Load monroe by setting up appropriate mode, asking user for
-connection endpoint."
-  (interactive
-   (let ((host (or (monroe-locate-running-nrepl-host) monroe-default-host)))
-     (list
-      (read-string (format "Host (default '%s'): " host)
-                   nil nil host))))
-  (unless (ignore-errors
-            (with-current-buffer
-                (get-buffer-create (concat "*monroe: " host-and-port "*"))
-              (prog1
-                  (monroe-connect host-and-port)
-                (goto-char (point-max))
-                (monroe-mode)
-                (switch-to-buffer (current-buffer)))))
-    (message "Unable to connect to %s" host-and-port)))
+(defun monroe (arg)
+  "Connect to an nREPL server and create a buffer for interaction."
+  (interactive "P")
+  (pcase-let*
+      ((`(,connect ,where ,autodetected)
+        (or (when-let ((host-and-port
+                        (monroe-locate-running-nrepl-host)))
+              (list #'monroe-connect-host-port host-and-port t))
+            (when-let ((socket-file (monroe-locate-socket)))
+              (list #'monroe-connect-socket socket-file t))
+            (list #'monroe-connect-host-port monroe-default-host nil)))
+       (`(,connect . ,where)
+        (if (and autodetected
+                 ;; i.e., called without any prefix argument.
+                 (not arg))
+            (cons connect where)
+          (pcase (read-multiple-choice
+                  "Connect via?"
+                  '((?h "host and port"
+                        "Connect to an nREPL by specifying a network hostname and port number.")
+                    (?s "socket"
+                        "Connect to an nREPL on a local UNIX socket file.")))
+            (`(,_ "host and port" . ,_)
+             (cons #'monroe-connect-host-port
+                   (read-string (format "Host (default '%s'): "
+                                        monroe-default-host)
+                                nil nil monroe-default-host)))
+            (`(,_ "socket" . ,_)
+             (cons #'monroe-connect-socket
+                   (read-file-name "socket file: "
+                                   nil monroe-socket-file t nil)))))))
+    (unless (ignore-errors
+              (with-current-buffer
+                  (get-buffer-create (concat "*monroe: " where "*"))
+                (prog1
+                    (funcall connect where)
+                  (goto-char (point-max))
+                  (monroe-mode)
+                  (switch-to-buffer (current-buffer)))))
+      (message "Unable to connect to %s" where))))
 (provide 'monroe)
 
 ;;; monroe.el ends here

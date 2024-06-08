@@ -764,7 +764,7 @@ The following keys are available in `monroe-interaction-mode`:
                   (goto-char (point-max))
                   (monroe-mode)
                   (switch-to-buffer (current-buffer)))))
-      (message "Unable to connect to %s" host-and-port))))
+      (message "Unable to connect to %s" where))))
 (provide 'monroe)
 
 ;;; monroe.el ends here

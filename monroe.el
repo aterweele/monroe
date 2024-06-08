@@ -749,7 +749,7 @@ The following keys are available in `monroe-interaction-mode`:
        (`(,connect . ,where)
         (if (and autodetected
                  ;; i.e., called without any prefix argument.
-                 (not (prefix-numeric-value current-prefix-arg)))
+                 (not arg))
             (cons connect where)
           (pcase (read-multiple-choice
                   "Connect via?"

@@ -513,7 +513,14 @@ inside a container.")
 (defun monroe-jump-find-file (file)
   "Internal function to find a file on the disk or inside a jar."
   (if (not (string-match "^jar:file:\\(.+\\)!\\(.+\\)" file))
-      (find-file (substring file 5))
+      (find-file (pcase file
+                   ;; under Leiningen, nREPL seems to give locations
+                   ;; like "file:/...". Extract the filename.
+                   ((rx string-start "file:" (let file (one-or-more anything)) string-end)
+                    file)
+                   ;; under clj, nREPL seems to give absolute
+                   ;; locations. Use the filename verbatim.
+                   (_ file)))
     (let* ((jar (match-string 1 file))
            (clj (match-string 2 file))
            (already-open (get-buffer (file-name-nondirectory jar))))

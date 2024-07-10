@@ -400,10 +400,14 @@ monroe-repl-buffer."
 
 (defun monroe-connection ()
   "Returns right monroe connection."
-  (or (get-process (concat "monroe/" (monroe-locate-running-nrepl-host)))
-      (get-process
-       (concat "monroe/"
-               (monroe-extract-host (buffer-name (current-buffer)))))))
+  (or
+   ;; reconstruct the process name made by `monroe-connect-host-port'.
+   (get-process (concat "monroe/" (monroe-locate-running-nrepl-host)))
+   ;; reconstruct the process name made by `monroe-connect-socket'.
+   (get-process (concat "monroe/" (monroe-locate-socket)))
+   (get-process
+    (concat "monroe/"
+            (monroe-extract-host (buffer-name (current-buffer)))))))
 
 (defun monroe-strip-protocol (host)
   "Check if protocol was given and strip it."

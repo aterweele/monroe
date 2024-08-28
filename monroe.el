@@ -1,4 +1,4 @@
-;;; -*- indent-tabs-mode: nil -*-
+;;; -*- indent-tabs-mode: nil; lexical-binding: t; -*-
 ;;; monroe.el --- Yet another client for nREPL
 
 ;; Copyright (c) 2014-2018 Sanel Zukan
@@ -144,6 +144,8 @@ to the one used on nrepl side.")
                   collect `(,key (cdr (assoc ,(format "%s" key) ,response))))
      ,@body))
 
+(define-error 'monroe-insufficient-input "The bencode data is incomplete")
+
 ;;; Bencode
 ;;; Stolen from nrepl.el which is adapted from http://www.emacswiki.org/emacs-en/bencode.el
 (defun monroe-bdecode-buffer ()
@@ -155,7 +157,11 @@ to the one used on nrepl side.")
    ((looking-at "\\([0-9]+\\):")
     (goto-char (match-end 0))
     (let* ((start (point))
-           (end (byte-to-position (+ (position-bytes start) (string-to-number (match-string 1))))))
+           (end (byte-to-position
+                 (+ (position-bytes start)
+                    (string-to-number (match-string 1))))))
+      (unless end
+        (signal 'monroe-insufficient-input (point)))
       (goto-char end)
       (buffer-substring-no-properties start end)))
    ((looking-at "l")
@@ -178,6 +184,8 @@ to the one used on nrepl side.")
    ((looking-at "e")
     (goto-char (match-end 0))
     nil)
+   ((or (looking-at "i\\|[0-9]") (eobp))
+    (signal 'monroe-insufficient-input (point)))
    (t
     (error "Cannot decode object: %d" (point)))))
 
@@ -335,33 +343,26 @@ buffer if the decode successful."
     (delete-region start end)
     decoded))
 
-(defun monroe-net-filter (process string)
-  "Called when the new message is received. Process will redirect
-all received output to this function; it will decode it and put in
-monroe-repl-buffer."
+(defun monroe-process-filter (process string)
   (with-current-buffer (process-buffer process)
     (goto-char (point-max))
     (insert string)
-    ;; Stolen from Cider. Assure we have end of the message so decoding can work;
-    ;; to make sure we are at the real end (session id can contain 'e' character), we call
-    ;; 'accept-process-output' once more.
-    ;;
-    ;; This 'ignore-errors' is a hard hack here since 'accept-process-output' will call filter
-    ;; which will be this function causing Emacs to hit max stack size limit.
-    (ignore-errors
-        (when (eq ?e (aref string (- (length string) 1)))
-          (unless (accept-process-output process 0.01)
-            (while (> (buffer-size) 1)
-              (mapc #'monroe-dispatch (monroe-net-decode))))))))
+    (goto-char (point-min))
+    (let (item)
+      (while (condition-case nil
+                 (progn (setq item (monroe-bdecode-buffer)) t)
+               (monroe-insufficient-input nil))
+        (delete-region (point-min) (point))
+        (monroe-dispatch item)))))
 
 (defun monroe-new-session-handler (process)
   "Returns callback that is called when new connection is established."
   (lambda (response)
     (monroe-dbind-response response (id new-session)
-      (when new-session
-        (message "Connected.")
-        (setq monroe-session new-session)
-        (remhash id monroe-requests)))))
+                           (when new-session
+                             (message "Connected.")
+                             (setq monroe-session new-session)
+                             (remhash id monroe-requests)))))
 
 (defun monroe-valid-host-string (str default)
   "Used for getting valid string for host/port part."
@@ -427,7 +428,7 @@ monroe-repl-buffer."
     (message "Connecting to nREPL host on '%s:%d'..." host port)
     (let ((process (open-network-stream
                     (concat "monroe/" host-and-port) name host port)))
-      (set-process-filter process 'monroe-net-filter)
+      (set-process-filter process 'monroe-process-filter)
       (set-process-sentinel process 'monroe-sentinel)
       (set-process-coding-system process 'utf-8-unix 'utf-8-unix)
       (monroe-send-hello (monroe-new-session-handler (process-buffer process)))
@@ -442,7 +443,7 @@ monroe-repl-buffer."
                   :name (concat "monroe/" socket-file)
                   :remote (expand-file-name socket-file)
                   :buffer (concat "*monroe-connection: " socket-file "*"))))
-    (set-process-filter process 'monroe-net-filter)
+    (set-process-filter process 'monroe-process-filter)
     (set-process-sentinel process 'monroe-sentinel)
     (set-process-coding-system process 'utf-8-unix 'utf-8-unix)
     (monroe-send-hello (monroe-new-session-handler (process-buffer process)))

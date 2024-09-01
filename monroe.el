@@ -282,14 +282,13 @@ the operations supported by an nREPL endpoint."
 
 ;;; code
 
-(defun monroe-make-response-handler ()
+(defun monroe-make-response-handler (process)
   "Returns a function that will be called when event is received."
    (lambda (response)
      (monroe-dbind-response response (id ns value err out ex root-ex status)
        (let ((output (concat err out
                              (if value
-                               (concat value "\n"))))
-             (process (get-buffer-process (monroe-repl-buffer))))
+                               (concat value "\n")))))
          ;; update namespace if needed
          (if ns (setq monroe-buffer-ns ns))
          (comint-output-filter process output)
@@ -311,13 +310,13 @@ the operations supported by an nREPL endpoint."
 
 (defun monroe-input-sender (proc input &optional ns)
   "Called when user enter data in REPL and when something is received in."
-  (monroe-send-eval-string input (monroe-make-response-handler) ns))
+  (monroe-send-eval-string input (monroe-make-response-handler proc) ns))
 
 (defun monroe-handle-input ()
   "Called when requested user input."
   (monroe-send-stdin
    (concat (read-from-minibuffer "Stdin: ") "\n")
-   (monroe-make-response-handler)))
+   (monroe-make-response-handler (get-buffer-process (monroe-repl-buffer)))))
 
 (defun monroe-sentinel (process message)
   "Called when connection is changed; in out case dropped."
@@ -577,7 +576,7 @@ inside a container.")
                    'clojure.repl/pst))))
     (monroe-send-eval-string
      (format "(do (require (symbol (namespace '%s))) (%s *e))" pst pst)
-     (monroe-make-response-handler))))
+     (monroe-make-response-handler (get-buffer-process (monroe-repl-buffer))))))
 
 (defun monroe-get-clojure-ns ()
   "If available, get the correct clojure namespace."
@@ -671,7 +670,8 @@ by locatin monroe-nrepl-server-project-file"
   "Send interrupt to all pending requests."
   (interactive)
   (dolist (id (monroe-extract-keys monroe-requests))
-    (monroe-send-interrupt id (monroe-make-response-handler))))
+    (monroe-send-interrupt id (monroe-make-response-handler
+                               (get-buffer-process (monroe-repl-buffer))))))
 
 ;; keys for interacting with Monroe REPL buffer
 (defvar monroe-interaction-mode-map

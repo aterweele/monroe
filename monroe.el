@@ -352,7 +352,10 @@ buffer if the decode successful."
                  (progn (setq item (monroe-bdecode-buffer)) t)
                (monroe-insufficient-input nil))
         (delete-region (point-min) (point))
-        (monroe-dispatch item)))))
+        ;; some dispatch functions, e.g. `monroe-eval-jump', will
+        ;; change which buffer is current.
+        (save-current-buffer
+          (monroe-dispatch item))))))
 
 (defun monroe-new-session-handler (process)
   "Returns callback that is called when new connection is established."

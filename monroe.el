@@ -397,6 +397,7 @@ buffer if the decode successful."
 (defun monroe-repl-buffer ()
   "Returns right monroe buffer."
   (or (get-buffer (format "*monroe: %s*" (monroe-locate-running-nrepl-host)))
+      (get-buffer (format "*monroe: %s*" (monroe-locate-socket)))
       (get-buffer
        (format "*monroe: %s*"
                (monroe-extract-host (buffer-name (current-buffer)))))))
@@ -583,9 +584,12 @@ inside a container.")
 
 (defun monroe-get-clojure-ns ()
   "If available, get the correct clojure namespace."
-  (and (eq major-mode 'clojure-mode)
-       (fboundp 'clojure-find-ns)
-       (funcall 'clojure-find-ns)))
+  (or (and (eq major-mode 'clojure-mode)
+           (fboundp 'clojure-find-ns)
+           (funcall 'clojure-find-ns))
+      (and (eq major-mode 'monroe-mode)
+           (with-current-buffer (process-buffer (monroe-connection))
+             monroe-buffer-ns))))
 
 (defun monroe-get-directory ()
   "Internal function to get project directory."
@@ -715,7 +719,7 @@ The following keys are available in `monroe-mode':
   (setq comint-input-sender 'monroe-input-sender)
   (setq mode-line-process '(":%s"))
   ;(set (make-local-variable 'font-lock-defaults) '(clojure-font-lock-keywords t))
-  (add-hook 'completion-at-point-functions #'monroe-completion-at-point 'local)
+  (add-hook 'completion-at-point-functions #'monroe-completion-at-point nil 'local)
   ;; a hack to keep comint happy
   (unless (comint-check-proc (current-buffer))
     (let ((fake-proc (start-process "monroe" (current-buffer) nil)))

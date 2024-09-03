@@ -731,6 +731,8 @@ The following keys are available in `monroe-mode':
 ;;; user command
 
 (defun clojure-enable-monroe ()
+  (add-hook 'completion-at-point-functions
+            #'monroe-completion-at-point nil 'local)
   (monroe-interaction-mode t))
 
 ;;;###autoload

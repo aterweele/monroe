@@ -564,13 +564,16 @@ inside a container.")
          (start (car bnds))
          (end (cdr bnds))
          (ns (monroe-get-clojure-ns))
-         (sym (thing-at-point 'symbol))
-         (response (monroe-send-sync-request (list "op" "completions"
-                                                   "ns" ns
-                                                   "prefix" sym))))
-    (monroe-dbind-response response (completions)
-      (when completions
-        (list start end (mapcar 'cdadr completions) nil)))))
+         (sym (thing-at-point 'symbol)))
+    (when-let ((response
+                (ignore-errors
+                  (monroe-send-sync-request (list "op" "completions"
+                                                  "ns" ns
+                                                  "prefix" sym)))))
+      (monroe-dbind-response
+       response (completions)
+       (when completions
+         (list start end (mapcar 'cdadr completions) nil))))))
 
 (defun monroe-get-stacktrace ()
   "When error happens, print the stack trace"

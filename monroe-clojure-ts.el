@@ -50,5 +50,27 @@
       (when (fboundp 'transpose-sexps-default-function)
         (setq-local transpose-sexps-function #'transpose-sexps-default-function)))))
 
+(defun monroe-clojure-ts-completion-at-point ()
+  (let* ((bnds (bounds-of-thing-at-point 'symbol))
+         (start (car bnds))
+         (end (cdr bnds)))
+    (list start end
+          (completion-table-merge
+           (completion-table-dynamic
+            (lambda (_)
+              (clojure-ts-bindings-above-point)))
+           (completion-table-dynamic
+            (lambda (string)
+              (when-let ((response
+                          (ignore-errors
+                            (monroe-send-sync-request
+                             (list "op" "completions"
+                                   "ns" (monroe-get-clojure-ns)
+                                   "prefix" string)))))
+                (monroe-dbind-response
+                 response (completions)
+                 (when completions
+                   (mapcar 'cdadr completions))))))))))
+
 (provide 'monroe-clojure-ts)
 ;;; monroe-clojure-ts.el ends here

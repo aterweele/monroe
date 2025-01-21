@@ -24,32 +24,6 @@
 
 ;;; Code:
 
-(defun monroe-clojure-ts-enable ()
-  ;; copied from `clojure-ts-mode'.
-  (set-syntax-table clojure-ts-mode-syntax-table)
-  (clojure-ts--ensure-grammars)
-  (let ((markdown-available (treesit-ready-p 'markdown_inline t)))
-    (when markdown-available
-      (treesit-parser-create 'markdown_inline)
-      (setq-local treesit-range-settings clojure-ts--treesit-range-settings))
-    (when (treesit-ready-p 'clojure)
-      (treesit-parser-create 'clojure)
-      (clojure-ts-mode-variables markdown-available)
-      (when clojure-ts--debug
-        (setq-local treesit--indent-verbose t)
-        (when (eq clojure-ts--debug 'font-lock)
-          (setq-local treesit--font-lock-verbose t))
-        (treesit-inspect-mode))
-      ;; NOTE: do this although we are NOT setting up a major mode.
-      (treesit-major-mode-setup)
-      (add-hook 'completion-at-point-functions #'clojure-ts-completion-at-point
-                nil 'local)
-      ;; Workaround for treesit-transpose-sexps not correctly working with
-      ;; treesit-thing-settings on Emacs 30.
-      ;; Once treesit-transpose-sexps it working again this can be removed
-      (when (fboundp 'transpose-sexps-default-function)
-        (setq-local transpose-sexps-function #'transpose-sexps-default-function)))))
-
 (defun monroe-clojure-ts-completion-at-point ()
   (let* ((bnds (bounds-of-thing-at-point 'symbol))
          (start (car bnds))
@@ -71,6 +45,30 @@
                  response (completions)
                  (when completions
                    (mapcar 'cdadr completions))))))))))
+
+(defun monroe-clojure-ts-enable ()
+  (setq-local comint-indirect-setup-function #'clojure-ts-mode)
+  (comint-fontify-input-mode)
+  ;; copied from `shell-mode'
+  (setq-local indent-line-function #'comint-indent-input-line-default)
+  ;; contrast the above with what IELM does, which is set
+  ;; `indent-line-function' to #'ielm-indent-line. I don't we can set
+  ;; to `treesit-indent'; that doesn't work.
+  (setq-local indent-region-function #'comint-indent-input-region-default)
+  ;; This is a bit opinionated. But if we don't do this,
+  ;; `comint-highlight-input' (default value: bold) overrides the
+  ;; fontification we achieved with
+  ;; `comint-fontify-input-mode'. `inferior-python-mode' also does
+  ;; this, but IELM and `shell' don't.
+  (setq-local comint-highlight-input nil)
+  (set-syntax-table clojure-ts-mode-syntax-table)
+
+  ;; i.e., override the existing `completion-at-point-functions' and
+  ;; install a hopefully-better one
+  (setq-local completion-at-point-functions (list #'monroe-clojure-ts-completion-at-point))
+
+  ;; TODO steal more from `inferior-lisp-mode', `run-python', etc.
+  )
 
 (provide 'monroe-clojure-ts)
 ;;; monroe-clojure-ts.el ends here

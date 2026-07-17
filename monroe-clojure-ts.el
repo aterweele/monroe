@@ -40,7 +40,9 @@
                             (monroe-send-sync-request
                              (list "op" "completions"
                                    "ns" (monroe-get-clojure-ns)
-                                   "prefix" string)))))
+                                   "prefix" ;; string
+                                   ""
+                                   )))))
                 (monroe-dbind-response
                  response (completions)
                  (when completions

@@ -30,9 +30,7 @@
          (end (cdr bnds)))
     (list start end
           (completion-table-merge
-           (completion-table-dynamic
-            (lambda (_)
-              (clojure-ts-bindings-above-point)))
+           ;; (clojure-ts-completion-at-point-function)
            (completion-table-dynamic
             (lambda (string)
               (when-let ((response
@@ -67,7 +65,7 @@
 
   ;; i.e., override the existing `completion-at-point-functions' and
   ;; install a hopefully-better one
-  (setq-local completion-at-point-functions (list #'monroe-clojure-ts-completion-at-point))
+  (setq-local completion-at-point-functions (list #'clojure-ts-completion-at-point-function #'monroe-clojure-ts-completion-at-point))
 
   ;; TODO steal more from `inferior-lisp-mode', `run-python', etc.
   )
